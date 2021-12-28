@@ -1,4 +1,6 @@
 import argparse
+import contextlib
+import io
 import logging
 from pathlib import Path
 from tqdm import tqdm
@@ -88,7 +90,7 @@ def import_matches(image_ids, database_path, pairs_path, matches_path,
 
 def geometric_verification(database_path, pairs_path):
     logging.info('Performing geometric verification of the matches...')
-    with pycolmap.ostream():
+    with pycolmap.ostream(stdout=False):
         pycolmap.verify_matches(
             database_path, pairs_path,
             max_num_trials=20000, min_inlier_ratio=0.1)
