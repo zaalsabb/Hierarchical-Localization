@@ -113,7 +113,7 @@ def visualize_loc(results, image_dir, reconstruction=None, top_k_db=2,
                 db_name = db.name
                 db_kp_q_db = np.array(dbs_kp_q_db[db_idx])
                 kp_q = mkp_q[db_kp_q_db[:, 0]]
-                kp_db = db.points2D[db_kp_q_db[:, 1]].xy
+                kp_db = np.array([db.points2D[i].xy for i in db_kp_q_db[:, 1]])
                 inliers_db = inliers_dbs[db_idx]
             else:
                 db_name = loc['db'][db_idx]
