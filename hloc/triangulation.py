@@ -2,6 +2,7 @@ import argparse
 import contextlib
 import io
 import logging
+import sys
 from pathlib import Path
 from tqdm import tqdm
 import h5py
@@ -10,6 +11,23 @@ import pycolmap
 
 from .utils.database import COLMAPDatabase
 from .utils.parsers import names_to_pair
+
+
+class OutputCapture:
+    def __init__(self, verbose):
+        self.verbose = verbose
+
+    def __enter__(self):
+        if not self.verbose:
+            self.capture = contextlib.redirect_stdout(io.StringIO())
+            self.out = self.capture.__enter__()
+
+    def __exit__(self, exc_type, *args):
+        if not self.verbose:
+            self.capture.__exit__(exc_type, *args)
+            if exc_type is not None:
+                logging.error('Failed with output:\n%s', self.out.getvalue())
+        sys.stdout.flush()
 
 
 def create_db_from_model(reconstruction, database_path):
@@ -88,30 +106,29 @@ def import_matches(image_ids, database_path, pairs_path, matches_path,
     db.close()
 
 
-def geometric_verification(database_path, pairs_path):
+def geometric_verification(database_path, pairs_path, verbose=False):
     logging.info('Performing geometric verification of the matches...')
-    with pycolmap.ostream(stdout=False):
-        pycolmap.verify_matches(
-            database_path, pairs_path,
-            max_num_trials=20000, min_inlier_ratio=0.1)
+    with OutputCapture(verbose):
+        with pycolmap.ostream():
+            pycolmap.verify_matches(
+                database_path, pairs_path,
+                max_num_trials=20000, min_inlier_ratio=0.1)
 
 
-def run_triangulation(model_path, database_path, image_dir, reference_model):
+def run_triangulation(model_path, database_path, image_dir, reference_model,
+                      verbose=False):
     model_path.mkdir(parents=True, exist_ok=True)
     logging.info('Running 3D triangulation...')
-    try:
-        with contextlib.redirect_stdout(io.StringIO()) as output:
-            with pycolmap.ostream(stdout=False):
-                reconstruction = pycolmap.triangulate_points(
-                    reference_model, database_path, image_dir, model_path)
-    except Exception as e:
-        logging.error('Triangulation failed with output:\n%s', output)
-        raise e
+    with OutputCapture(verbose):
+        with pycolmap.ostream():
+            reconstruction = pycolmap.triangulate_points(
+                reference_model, database_path, image_dir, model_path)
     return reconstruction
 
 
 def main(sfm_dir, reference_model, image_dir, pairs, features, matches,
-         skip_geometric_verification=False, min_match_score=None):
+         skip_geometric_verification=False, min_match_score=None,
+         verbose=False):
 
     assert reference_model.exists(), reference_model
     assert features.exists(), features
@@ -127,8 +144,9 @@ def main(sfm_dir, reference_model, image_dir, pairs, features, matches,
     import_matches(image_ids, database, pairs, matches,
                    min_match_score, skip_geometric_verification)
     if not skip_geometric_verification:
-        geometric_verification(database, pairs)
-    reconstruction = run_triangulation(sfm_dir, database, image_dir, reference)
+        geometric_verification(database, pairs, verbose)
+    reconstruction = run_triangulation(sfm_dir, database, image_dir, reference,
+                                       verbose)
     logging.info('Finished the triangulation with statistics:\n%s',
                  reconstruction.summary())
     return reconstruction
@@ -146,6 +164,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--skip_geometric_verification', action='store_true')
     parser.add_argument('--min_match_score', type=float)
+    parser.add_argument('--verbose', action='store_true')
     args = parser.parse_args()
 
     main(**args.__dict__)

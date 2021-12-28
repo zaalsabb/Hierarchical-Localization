@@ -1,16 +1,13 @@
 import argparse
-import contextlib
-import io
 import logging
 import shutil
-import sys
 import multiprocessing
 from pathlib import Path
 import pycolmap
 
 from .utils.database import COLMAPDatabase
 from .triangulation import (
-    import_features, import_matches, geometric_verification)
+    import_features, import_matches, geometric_verification, OutputCapture)
 
 
 def create_empty_db(database_path):
@@ -44,21 +41,15 @@ def get_image_ids(database_path):
     return images
 
 
-def run_reconstruction(sfm_dir, database_path, image_dir):
+def run_reconstruction(sfm_dir, database_path, image_dir, verbose=False):
     models_path = sfm_dir / 'models'
     models_path.mkdir(exist_ok=True, parents=True)
     logging.info('Running 3D reconstruction...')
-    try:
-        with contextlib.redirect_stdout(io.StringIO()) as output:
-            # TODO: stdout redirection hangs, probably due to a race condition.
-            with pycolmap.ostream(stdout=False):
-                reconstructions = pycolmap.incremental_mapping(
-                    database_path, image_dir, models_path,
-                    num_threads=min(multiprocessing.cpu_count(), 16))
-    except Exception as e:
-        logging.error('Reconstruction failed with output:\n%s', output)
-        raise e
-    sys.stdout.flush()
+    with OutputCapture(verbose):
+        with pycolmap.ostream():
+            reconstructions = pycolmap.incremental_mapping(
+                database_path, image_dir, models_path,
+                num_threads=min(multiprocessing.cpu_count(), 16))
 
     if len(reconstructions) == 0:
         logging.error('Could not reconstruct any model!')
@@ -83,7 +74,7 @@ def run_reconstruction(sfm_dir, database_path, image_dir):
 
 
 def main(sfm_dir, image_dir, pairs, features, matches,
-         camera_mode=pycolmap.CameraMode.AUTO,
+         camera_mode=pycolmap.CameraMode.AUTO, verbose=False,
          skip_geometric_verification=False, min_match_score=None):
 
     assert features.exists(), features
@@ -100,8 +91,8 @@ def main(sfm_dir, image_dir, pairs, features, matches,
     import_matches(image_ids, database, pairs, matches,
                    min_match_score, skip_geometric_verification)
     if not skip_geometric_verification:
-        geometric_verification(database, pairs)
-    reconstruction = run_reconstruction(sfm_dir, database, image_dir)
+        geometric_verification(database, pairs, verbose)
+    reconstruction = run_reconstruction(sfm_dir, database, image_dir, verbose)
     if reconstruction is not None:
         logging.info(f'Reconstruction statistics:\n{reconstruction.summary()}'
                      + f'\n\tnum_input_images = {len(image_ids)}')
@@ -121,6 +112,7 @@ if __name__ == '__main__':
                         choices=list(pycolmap.CameraMode.__members__.keys()))
     parser.add_argument('--skip_geometric_verification', action='store_true')
     parser.add_argument('--min_match_score', type=float)
+    parser.add_argument('--verbose', action='store_true')
     args = parser.parse_args()
 
     main(**args.__dict__)
