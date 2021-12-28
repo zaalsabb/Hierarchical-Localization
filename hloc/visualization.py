@@ -22,8 +22,6 @@ def visualize_sfm_2d(reconstruction, image_dir, color_by='visibility',
 
     for i in selected:
         image = reconstruction.images[i]
-        name = image.name
-        image = read_image(image_dir / name)
         keypoints = np.array([p.xy for p in image.points2D])
         visible = np.array([p.has_point3D() for p in image.points2D])
 
@@ -48,7 +46,8 @@ def visualize_sfm_2d(reconstruction, image_dir, color_by='visibility',
         else:
             raise NotImplementedError(f'Coloring not implemented: {color_by}.')
 
-        plot_images([image], dpi=dpi)
+        name = image.name
+        plot_images([read_image(image_dir / name)], dpi=dpi)
         plot_keypoints([keypoints], colors=[color], ps=4)
         add_text(0, text)
         add_text(0, name, pos=(0.01, 0.01), fs=5, lcolor=None, va='bottom')

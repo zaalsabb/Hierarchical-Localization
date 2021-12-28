@@ -1,8 +1,11 @@
 import argparse
+import contextlib
+import io
 import logging
-from pathlib import Path
 import shutil
+import sys
 import multiprocessing
+from pathlib import Path
 import pycolmap
 
 from .utils.database import COLMAPDatabase
@@ -28,14 +31,8 @@ def import_images(image_dir, database_path, camera_mode):
         raise IOError(f'No images found in {image_dir}.')
     if isinstance(camera_mode, str):
         camera_mode = getattr(pycolmap.CameraMode, camera_mode)
-    pycolmap.import_images(database_path, image_dir, camera_mode)
-
-    # maybe not needed
-    db = COLMAPDatabase.connect(database_path)
-    db.execute("DELETE FROM keypoints;")
-    db.execute("DELETE FROM descriptors;")
-    db.commit()
-    db.close()
+    with pycolmap.ostream():
+        pycolmap.import_images(database_path, image_dir, camera_mode)
 
 
 def get_image_ids(database_path):
@@ -50,14 +47,23 @@ def get_image_ids(database_path):
 def run_reconstruction(sfm_dir, database_path, image_dir):
     models_path = sfm_dir / 'models'
     models_path.mkdir(exist_ok=True, parents=True)
-    reconstructions = pycolmap.incremental_mapping(
-        database_path, image_dir, models_path,
-        num_threads=min(multiprocessing.cpu_count(), 16))
+    logging.info('Running 3D reconstruction...')
+    try:
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            # TODO: stdout redirection hangs, probably due to a race condition.
+            with pycolmap.ostream(stdout=False):
+                reconstructions = pycolmap.incremental_mapping(
+                    database_path, image_dir, models_path,
+                    num_threads=min(multiprocessing.cpu_count(), 16))
+    except Exception as e:
+        logging.error('Reconstruction failed with output:\n%s', output)
+        raise e
+    sys.stdout.flush()
 
     if len(reconstructions) == 0:
         logging.error('Could not reconstruct any model!')
         return None
-    logging.info(f'Reconstructed {len(reconstructions)} models.')
+    logging.info(f'Reconstructed {len(reconstructions)} model(s).')
 
     largest_index = None
     largest_num_images = 0

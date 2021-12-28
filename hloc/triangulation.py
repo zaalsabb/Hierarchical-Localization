@@ -88,16 +88,24 @@ def import_matches(image_ids, database_path, pairs_path, matches_path,
 
 def geometric_verification(database_path, pairs_path):
     logging.info('Performing geometric verification of the matches...')
-    pycolmap.verify_matches(
-        database_path, pairs_path, max_num_trials=20000, min_inlier_ratio=0.1)
+    with pycolmap.ostream():
+        pycolmap.verify_matches(
+            database_path, pairs_path,
+            max_num_trials=20000, min_inlier_ratio=0.1)
 
 
 def run_triangulation(model_path, database_path, image_dir, reference_model):
     model_path.mkdir(parents=True, exist_ok=True)
-    model = pycolmap.triangulate_points(
-        reference_model, database_path, image_dir, model_path)
-    stats = model.summary()
-    return stats
+    logging.info('Running 3D triangulation...')
+    try:
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            with pycolmap.ostream(stdout=False):
+                reconstruction = pycolmap.triangulate_points(
+                    reference_model, database_path, image_dir, model_path)
+    except Exception as e:
+        logging.error('Triangulation failed with output:\n%s', output)
+        raise e
+    return reconstruction
 
 
 def main(sfm_dir, reference_model, image_dir, pairs, features, matches,
