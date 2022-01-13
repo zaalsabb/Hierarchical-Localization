@@ -24,6 +24,9 @@ def main(dataset,outputs, num_matches, build_database):
     else:
         global_descriptors = Path(features_path)
 
+    if num_matches == 0:
+        return
+
     ## If previous query descriptors file exists, delete it ##
     if os.path.isfile(features_path_query):
         os.remove(features_path_query)
