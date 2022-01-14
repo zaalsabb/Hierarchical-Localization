@@ -80,7 +80,7 @@ confs = {
         'output': 'feats-d2net-ss',
         'model': {
             'name': 'd2net',
-            'multiscale': False,
+            'multiscale': True,
         },
         'preprocessing': {
             'grayscale': False,
