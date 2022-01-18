@@ -17,7 +17,7 @@ from hloc.utils.parsers import names_to_pair
 #     def __init__(self, x, y):
 #         self.pt = [int(x),int(y)]
 
-def main(I1,I2,params):
+def main(f_kp1,f_kp2,params):
     dataset = join(dirname(realpath(__file__)),'datasets')
     outputs = join(dirname(realpath(__file__)),'outputs')
 
@@ -27,46 +27,40 @@ def main(I1,I2,params):
     os.mkdir(dataset)
     os.mkdir(outputs)
 
-    cv2.imwrite(join(dataset,'I1.jpg'),I1)
-    cv2.imwrite(join(dataset,'I2.jpg'),I2)
-
     dataset = Path(dataset)
     images = dataset 
 
     outputs = Path(outputs)
     pairs = outputs / 'pairs.txt'
-    np.savetxt(str(pairs),[['I1.jpg','I2.jpg']], fmt="%s")
+    np.savetxt(str(pairs),[['I1','I2']], fmt="%s")
+
+    features_combined = outputs / 'features.h5'
 
     if params == 'R2D2':
-        feature_conf = extract_features.confs['r2d2']
         matcher_conf = match_features.confs['NN-ratio']
     elif params == 'SuperPoint+NN':
-        feature_conf = extract_features.confs['superpoint_max']
         matcher_conf = match_features.confs['NN-superpoint']
     elif params == 'SuperPoint+superglue':
-        feature_conf = extract_features.confs['superpoint_max']
         matcher_conf = match_features.confs['superglue']
     elif params == 'D2-Net':
-        feature_conf = extract_features.confs['d2net-ss']
         matcher_conf = match_features.confs['NN-ratio']
 
-    features = extract_features.main(feature_conf, images, outputs)
+    f1 = h5py.File(f_kp1, 'r')
+    f2 = h5py.File(f_kp2, 'r')
+
+    with h5py.File(features_combined,'w') as f:
+        f1.copy('image.jpg',f, name='I1')
+        f2.copy('image.jpg',f, name='I2')
+
     matches = match_features.main(
-        matcher_conf, pairs, feature_conf['output'], outputs)    
+        matcher_conf, pairs, 'features', outputs)    
 
-    feature_file = h5py.File(features, 'r')
-    kp1 = feature_file['I1.jpg']['keypoints'].__array__()
-    kp2 = feature_file['I2.jpg']['keypoints'].__array__()
-
-    pair = names_to_pair('I1.jpg','I2.jpg')
+    pair = names_to_pair('I1','I2')
     match_file = h5py.File(matches, 'r')
     matches1 = match_file[pair]['matches0'].__array__()
-
-    kp1 = np.array([cv2.KeyPoint(int(kp1[i,0]),int(kp1[i,1]),3) for i in range(len(kp1))])
-    kp2 = np.array([cv2.KeyPoint(int(kp2[i,0]),int(kp2[i,1]),3) for i in range(len(kp2))])
     matches = [cv2.DMatch(i,m,0) for i,m in enumerate(matches1) if m != -1]
-
-    return matches, kp1, kp2
+    
+    return matches
 
 
 if __name__ == "__main__":
