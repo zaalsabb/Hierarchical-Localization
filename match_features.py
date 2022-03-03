@@ -17,7 +17,7 @@ from hloc.utils.parsers import names_to_pair
 #     def __init__(self, x, y):
 #         self.pt = [int(x),int(y)]
 
-def main(f_kp1,f_kp2,params):
+def main(f_kp1,f_kp2,detector,matcher,model=None):
     dataset = join(dirname(realpath(__file__)),'datasets')
     outputs = join(dirname(realpath(__file__)),'outputs')
 
@@ -36,13 +36,13 @@ def main(f_kp1,f_kp2,params):
 
     features_combined = outputs / 'features.h5'
 
-    if params == 'R2D2':
+    if detector == 'R2D2':
         matcher_conf = match_features.confs['NN-ratio']
-    elif params == 'SuperPoint+NN':
+    elif detector == 'SuperPoint' and matcher == 'NN':
         matcher_conf = match_features.confs['NN-superpoint']
-    elif params == 'SuperPoint+superglue':
+    elif detector == 'SuperPoint' and matcher == 'SuperGlue':
         matcher_conf = match_features.confs['superglue']
-    elif params == 'D2-Net':
+    elif detector == 'D2-Net':
         matcher_conf = match_features.confs['NN-ratio']
 
     f1 = h5py.File(f_kp1, 'r')
@@ -53,7 +53,7 @@ def main(f_kp1,f_kp2,params):
         f2.copy('image.jpg',f, name='I2')
 
     matches = match_features.main(
-        matcher_conf, pairs, 'features', outputs)    
+        matcher_conf, pairs, 'features', outputs, model=model)    
 
     pair = names_to_pair('I1','I2')
     match_file = h5py.File(matches, 'r')
@@ -61,6 +61,21 @@ def main(f_kp1,f_kp2,params):
     matches = [cv2.DMatch(i,m,0) for i,m in enumerate(matches1) if m != -1]
     
     return matches
+
+def load_model(detector,matcher):
+
+    if detector == 'R2D2':
+        matcher_conf = match_features.confs['NN-ratio']
+    elif detector == 'SuperPoint' and matcher == 'NN':
+        matcher_conf = match_features.confs['NN-superpoint']
+    elif detector == 'SuperPoint' and matcher == 'SuperGlue':
+        matcher_conf = match_features.confs['superglue']
+    elif detector == 'D2-Net':
+        matcher_conf = match_features.confs['NN-ratio']
+
+    model = match_features.load_model(matcher_conf)
+    
+    return model    
 
 
 if __name__ == "__main__":

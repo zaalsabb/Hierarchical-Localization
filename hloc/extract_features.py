@@ -200,10 +200,15 @@ class ImageDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.names)
 
+def load_model(conf):
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    Model = dynamic_load(extractors, conf['model']['name'])
+    model = Model(conf['model']).eval().to(device) ###load model
+    return model
 
 @torch.no_grad()
 def main(conf, image_dir, export_dir=None, as_half=False,
-         image_list=None, feature_path=None):
+         image_list=None, feature_path=None, model=None):
     logging.info('Extracting local features with configuration:'
                  f'\n{pprint.pformat(conf)}')
 
@@ -218,10 +223,11 @@ def main(conf, image_dir, export_dir=None, as_half=False,
     if set(loader.dataset.names).issubset(set(skip_names)):
         logging.info('Skipping the extraction.')
         return feature_path
-
+    
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    Model = dynamic_load(extractors, conf['model']['name'])
-    model = Model(conf['model']).eval().to(device)
+    if model is None:
+        Model = dynamic_load(extractors, conf['model']['name'])
+        model = Model(conf['model']).eval().to(device) ###load model
 
     for data in tqdm(loader):
         name = data['name'][0]  # remove batch dimension

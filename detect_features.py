@@ -9,7 +9,7 @@ import h5py
 from hloc.utils.parsers import names_to_pair
 
 
-def main(I1,fpath,params):
+def main(I1,fpath,detector,model=None):
     dataset = join(dirname(realpath(__file__)),'datasets')
     outputs = join(dirname(realpath(__file__)),'outputs')
 
@@ -31,16 +31,14 @@ def main(I1,fpath,params):
     # pairs = outputs / 'pairs.txt'
     # np.savetxt(str(pairs) ,[['I1.jpg','I2.jpg']], fmt="%s")
 
-    if params == 'R2D2':
+    if detector == 'R2D2':
         feature_conf = extract_features.confs['r2d2']
-    elif params == 'SuperPoint+NN':
+    elif detector == 'SuperPoint':
         feature_conf = extract_features.confs['superpoint_max']
-    elif params == 'SuperPoint+superglue':
-        feature_conf = extract_features.confs['superpoint_max']
-    elif params == 'D2-Net':
+    elif detector == 'D2-Net':
         feature_conf = extract_features.confs['d2net-ss']
 
-    features = extract_features.main(feature_conf, images, outputs, feature_path=Path(fpath))   
+    features = extract_features.main(feature_conf, images, outputs, feature_path=Path(fpath), model=model)   
 
     feature_file = h5py.File(features, 'r')
     kp1 = feature_file['image.jpg']['keypoints'].__array__()
@@ -48,6 +46,18 @@ def main(I1,fpath,params):
 
     return kp1
 
+def load_model(detector):
+
+    if detector == 'R2D2':
+        feature_conf = extract_features.confs['r2d2']
+    elif detector == 'SuperPoint':
+        feature_conf = extract_features.confs['superpoint_max']
+    elif detector == 'D2-Net':
+        feature_conf = extract_features.confs['d2net-ss']
+
+    model = extract_features.load_model(feature_conf)
+    
+    return model
 
 if __name__ == "__main__":
     main()

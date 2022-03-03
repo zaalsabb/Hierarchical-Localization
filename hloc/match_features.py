@@ -57,7 +57,7 @@ confs = {
 
 def main(conf: Dict, pairs: Path, features: Union[Path, str],
          export_dir: Optional[Path] = None, matches: Optional[Path] = None,
-         features_ref: Optional[Path] = None, exhaustive: bool = False):
+         features_ref: Optional[Path] = None, exhaustive: bool = False, model=None):
 
     if isinstance(features, Path) or Path(features).exists():
         features_q = features
@@ -81,15 +81,20 @@ def main(conf: Dict, pairs: Path, features: Union[Path, str],
         features_ref = [features_ref]
 
     match_from_paths(
-        conf, pairs, matches, features_q, features_ref, exhaustive)
+        conf, pairs, matches, features_q, features_ref, exhaustive, model=model)
 
     return matches
 
+def load_model(conf):
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    Model = dynamic_load(matchers, conf['model']['name'])
+    model = Model(conf['model']).eval().to(device) ###load model   
+    return model 
 
 @torch.no_grad()
 def match_from_paths(conf: Dict, pairs_path: Path, match_path: Path,
                      feature_path_q: Path, feature_paths_refs: Path,
-                     exhaustive: bool = False):
+                     exhaustive: bool = False, model=None):
     logging.info('Matching local features with configuration:'
                  f'\n{pprint.pformat(conf)}')
 
@@ -121,8 +126,9 @@ def match_from_paths(conf: Dict, pairs_path: Path, match_path: Path,
             f.write('\n'.join(' '.join((n1, n2)) for n1, n2 in pairs))
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    Model = dynamic_load(matchers, conf['model']['name'])
-    model = Model(conf['model']).eval().to(device)
+    if model is None:
+        Model = dynamic_load(matchers, conf['model']['name'])
+        model = Model(conf['model']).eval().to(device) ###load model
 
     match_path.parent.mkdir(exist_ok=True, parents=True)
     skip_pairs = set(list_h5_names(match_path) if match_path.exists() else ())
