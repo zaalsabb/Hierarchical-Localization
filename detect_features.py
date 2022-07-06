@@ -9,7 +9,7 @@ import h5py
 from hloc.utils.parsers import names_to_pair
 
 
-def main(I1,fpath,detector,model=None):
+def main(I1,fpath,detector,model=None,id=None):
     dataset = join(dirname(realpath(__file__)),'datasets')
     outputs = join(dirname(realpath(__file__)),'outputs')
 
@@ -22,7 +22,10 @@ def main(I1,fpath,detector,model=None):
     except:
         pass
 
-    cv2.imwrite(join(dataset,'image.jpg'),I1)
+    if id is None:
+        id = 'image.jpg'
+
+    cv2.imwrite(join(dataset,id),I1)
 
     dataset = Path(dataset)
     images = dataset 
@@ -37,13 +40,25 @@ def main(I1,fpath,detector,model=None):
         feature_conf = extract_features.confs['superpoint_max']
     elif detector == 'D2-Net':
         feature_conf = extract_features.confs['d2net-ss']
+    elif detector == 'netvlad':
+        feature_conf = extract_features.confs['netvlad']
 
-    features = extract_features.main(feature_conf, images, outputs, feature_path=Path(fpath), model=model)   
+    features_file = extract_features.main(feature_conf, images, outputs, feature_path=Path(fpath), model=model)   
 
-    feature_file = h5py.File(features, 'r')
-    kp1 = feature_file['image.jpg']['keypoints'].__array__()
-    kp1 = np.array([cv2.KeyPoint(int(kp1[i,0]),int(kp1[i,1]),3) for i in range(len(kp1))])
+    # delete temp image
+    os.remove(join(dataset,id))
 
+    if detector != 'netvlad':
+        return load_features(features_file)        
+    else:
+        return None
+
+def load_features(features_file,id=None):
+    if id is None:
+        id = 'image.jpg'
+    feature_h5 = h5py.File(features_file, 'r')
+    kp1 = feature_h5[id]['keypoints'].__array__()
+    kp1 = np.array([cv2.KeyPoint(int(kp1[i,0]),int(kp1[i,1]),3) for i in range(len(kp1))])    
     return kp1
 
 def load_model(detector):
@@ -54,7 +69,9 @@ def load_model(detector):
         feature_conf = extract_features.confs['superpoint_max']
     elif detector == 'D2-Net':
         feature_conf = extract_features.confs['d2net-ss']
-
+    elif detector == 'netvlad':
+        feature_conf = extract_features.confs['netvlad']
+        
     model = extract_features.load_model(feature_conf)
     
     return model

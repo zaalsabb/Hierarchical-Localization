@@ -12,13 +12,21 @@ from .utils.read_write_model import read_images_binary
 from .utils.io import list_h5_names
 
 
-def main(descriptors, output, num_matched,
-         images, query, db_descriptors=None):
+def main(descriptors, num_matched,output=None,
+        db_descriptors=None):
     logging.info('Extracting image pairs from a retrieval database.')
 
+    if isinstance(db_descriptors, (Path, str)):
+        db_descriptors = [db_descriptors]
+    name2db = {n: i for i, p in enumerate(db_descriptors)
+               for n in list_h5_names(p)}
+
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    db_names = list_h5_names(db_descriptors)
+    db_names = list(name2db.keys())
     query_names = list_h5_names(descriptors)
+
+    if num_matched > len(db_names):
+        num_matched = len(db_names)
 
     def get_descriptors(names, path, name2idx=None, key='global_descriptor'):
         if name2idx is None:
@@ -31,28 +39,23 @@ def main(descriptors, output, num_matched,
                     desc.append(fd[n][key].__array__())
         return torch.from_numpy(np.stack(desc, 0)).to(device).float()
 
-    db_desc = get_descriptors(db_names, db_descriptors)
+    db_desc = get_descriptors(db_names, db_descriptors, name2db)
     query_desc = get_descriptors(query_names, descriptors)
     sim = torch.einsum('id,jd->ij', query_desc, db_desc)
     topk = torch.topk(sim, num_matched, dim=1).indices.cpu().numpy()
-
+    scores = sim[torch.arange(len(query_names)), topk].cpu().numpy().reshape(-1)
+    
     pairs = []
-
-    shutil.rmtree(str(output.parent)+'/matches',ignore_errors=True)
-    mkdir(str(output.parent)+'/matches')
-
     for query, indices in zip(query_names, topk):
-        query_match_folder = str(output.parent)+'/matches/'+query.split('.')[0]
-        mkdir(query_match_folder)
         for i in indices:
             pair = (query, db_names[i])
             pairs.append(pair)
-            if images is not None:
-                shutil.copy(path.join(str(images), db_names[i]), path.join(query_match_folder, db_names[i]))
 
-    logging.info(f'Found {len(pairs)} pairs.')
-    with open(output, 'w') as f:
-        f.write('\n'.join(' '.join([i, j]) for i, j in pairs))
+    if output is not None:
+        with open(output, 'w') as f:
+            f.write('\n'.join(' '.join([i, j]) for i, j in pairs))
+
+    return pairs, scores
 
 
 if __name__ == "__main__":
